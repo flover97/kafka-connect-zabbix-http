@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>5.0</version>
+    <date>2021-11-18T14:46:36Z</date>
+    <groups>
+        <group>
+            <name>Templates/Applications</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>Kafka Connect HTTP</template>
+            <name>Kafka Connect HTTP</name>
+            <description>Template for Kafka Connect</description>
+            <groups>
+                <group>
+                    <name>Templates/Applications</name>
+                </group>
+            </groups>
+            <items>
+                <item>
+                    <name>Get Connectors</name>
+                    <type>HTTP_AGENT</type>
+                    <key>get.connectors</key>
+                    <delay>20s</delay>
+                    <trends>0</trends>
+                    <value_type>TEXT</value_type>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <params>$.body.[*].status</params>
+                        </step>
+                    </preprocessing>
+                    <url>{HOST.IP}:8083/connectors?expand=status</url>
+                    <output_format>JSON</output_format>
+                </item>
+            </items>
+            <discovery_rules>
+                <discovery_rule>
+                    <name>Connector Name</name>
+                    <type>DEPENDENT</type>
+                    <key>conn.discover.name</key>
+                    <delay>0</delay>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>Connector {#NAME} Status</name>
+                            <type>HTTP_AGENT</type>
+                            <key>conn.discover.name.status['{#NAME}']</key>
+                            <delay>20s</delay>
+                            <trends>0</trends>
+                            <value_type>TEXT</value_type>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.body.connector.state</params>
+                                </step>
+                            </preprocessing>
+                            <url>{HOST.IP}:8083/connectors/{#NAME}/status</url>
+                            <output_format>JSON</output_format>
+                            <trigger_prototypes>
+                                <trigger_prototype>
+                                    <expression>{str(FAILED)}=1</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>{str(RUNNING)}=1</recovery_expression>
+                                    <name>Connector {#NAME} FAILED</name>
+                                    <priority>DISASTER</priority>
+                                </trigger_prototype>
+                                <trigger_prototype>
+                                    <expression>{str(PAUSED)}=1</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>{str(RUNNING)}=1</recovery_expression>
+                                    <name>Connector {#NAME} PAUSED</name>
+                                    <priority>AVERAGE</priority>
+                                </trigger_prototype>
+                                <trigger_prototype>
+                                    <expression>{str(UNASSIGNED)}=1</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>{str(RUNNING)}=1</recovery_expression>
+                                    <name>Connector {#NAME} UNASSIGNED</name>
+                                    <priority>HIGH</priority>
+                                </trigger_prototype>
+                            </trigger_prototypes>
+                        </item_prototype>
+                    </item_prototypes>
+                    <master_item>
+                        <key>get.connectors</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>output = JSON.parse(value).map(function(full){
+    return {&quot;{#NAME}&quot;: full.name}
+})
+return JSON.stringify(output)</params>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+                <discovery_rule>
+                    <name>Connector Tasks</name>
+                    <type>DEPENDENT</type>
+                    <key>conn.discover.tasks</key>
+                    <delay>0</delay>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>Task {#TASK_ID} Connector {#CONN_NAME} Status</name>
+                            <type>HTTP_AGENT</type>
+                            <key>conn.discover.tasks.status.task['{#TASK_ID}, {#CONN_NAME}']</key>
+                            <trends>0</trends>
+                            <value_type>TEXT</value_type>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.body.state</params>
+                                </step>
+                            </preprocessing>
+                            <url>{HOST.IP}:8083/connectors/{#CONN_NAME}/tasks/{#TASK_ID}/status</url>
+                            <output_format>JSON</output_format>
+                            <trigger_prototypes>
+                                <trigger_prototype>
+                                    <expression>{str(FAILED)}=1</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>{str(RUNNING)}=1</recovery_expression>
+                                    <name>Connector {#CONN_NAME} TASK {#TASK_ID} FAILED</name>
+                                    <priority>DISASTER</priority>
+                                    <manual_close>YES</manual_close>
+                                </trigger_prototype>
+                                <trigger_prototype>
+                                    <expression>{str(PAUSED)}=1</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>{str(RUNNING)}=1</recovery_expression>
+                                    <name>Connector {#CONN_NAME} TASK {#TASK_ID} PAUSED</name>
+                                    <priority>INFO</priority>
+                                    <manual_close>YES</manual_close>
+                                </trigger_prototype>
+                                <trigger_prototype>
+                                    <expression>{str(UNASSIGNED)}=1</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>{str(RUNNING)}=1</recovery_expression>
+                                    <name>Connector {#CONN_NAME} TASK {#TASK_ID} UNASSIGNED</name>
+                                    <priority>AVERAGE</priority>
+                                    <manual_close>YES</manual_close>
+                                </trigger_prototype>
+                            </trigger_prototypes>
+                        </item_prototype>
+                    </item_prototypes>
+                    <master_item>
+                        <key>get.connectors</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>a=[];
+output = JSON.parse(value).map(function(full){
+    
+    full.tasks.map(function(tsk){
+       a.push({&quot;{#CONN_NAME}&quot;: full.name, &quot;{#TASK_ID}&quot;: tsk.id})
+})
+
+})
+return JSON.stringify(a)</params>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+            </discovery_rules>
+        </template>
+    </templates>
+</zabbix_export>
